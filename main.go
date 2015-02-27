@@ -9,6 +9,7 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/mattn/go-sqlite3"
 	"math/rand"
+	"strconv"
 	"time"
 )
 
@@ -21,6 +22,10 @@ type RegisterForm struct {
 	Name     string `form:"name" binding:"required"`
 	Email    string `form:"email" binding:"required"`
 	Password string `form:"password" binding:"required"`
+}
+
+type CodeForm struct {
+	Code string `form:"code" bindind:"required"`
 }
 
 type User struct {
@@ -67,13 +72,13 @@ func main() {
 		var form RegisterForm
 		var user User
 
-		session, err := store.Get(c.Request, "logged-users")
+		session, err := store.Get(c.Request, "cookie")
 		if err != nil {
 			c.AbortWithStatus(500)
 			return
 		}
 
-		if _, ok := session.Values["id"]; ok {
+		if _, ok := session.Values["user"]; ok {
 			c.Redirect(301, "/login/second")
 			return
 		}
@@ -99,22 +104,43 @@ func main() {
 		db.Create(&user)
 		session.Values["user"] = user.ID
 		//We flag the user as new so we can show him the QR code
-		session.Values["new"] = true
+		session.Values["new"] = 1
 		session.Save(c.Request, c.Writer)
 		c.Redirect(301, "/register/second")
 	})
 
 	r.GET("/register/second", func(c *gin.Context) {
-		session, err := store.Get(c.Request, "logged-users")
+		session, err := store.Get(c.Request, "cookie")
 		if err != nil {
 			c.AbortWithStatus(500)
 			return
 		}
 
-		if _, ok := session.Values["user"]; ok {
+		userId, okUser := session.Values["user"]
+		_, okNew := session.Values["new"]
+
+		if !okUser || !okNew {
 			c.Redirect(301, "/login/second")
 			return
 		}
+
+		var user User
+		if db.First(&user, userId).RecordNotFound() {
+			//If we can't find the user we logout
+			//This is a rare condition, can happen when a record has been deleted
+			c.Redirect(301, "/logout")
+			return
+		}
+
+		otp, err := gototp.New(user.TOTP)
+		if err != nil {
+			c.AbortWithStatus(500)
+		}
+
+		code := otp.Now()
+		qrUrl := otp.QRCodeGoogleChartsUrl("TOTP", 300)
+
+		c.HTML(200, "qr.tmpl", gin.H{"code": code, "qrUrl": qrUrl})
 	})
 
 	//Login
@@ -169,6 +195,53 @@ func main() {
 		c.HTML(200, "second.tmpl", nil)
 	})
 
+	r.POST("/login/second", func(c *gin.Context) {
+		var form CodeForm
+		c.BindWith(&form, binding.Form)
+
+		session, err := store.Get(c.Request, "cookie")
+		if err != nil {
+			c.AbortWithStatus(500)
+			return
+		}
+		userId, ok := session.Values["user"]
+		if !ok {
+			c.Redirect(301, "/login")
+			return
+		}
+
+		var user User
+
+		db.First(&user, userId)
+		otp, err := gototp.New(user.TOTP)
+		if nil != err {
+			c.AbortWithStatus(500)
+		}
+
+		code64, err := strconv.ParseInt(form.Code, 0, 32)
+		if err != nil {
+			c.HTML(200, "second.tmpl", gin.H{"error": "Código Incorrecto"})
+			return
+		}
+
+		code := int32(code64)
+
+		//We use the code from before and after to take in account time differences between the device and the server
+		before := otp.FromNow(-1)
+		now := otp.Now()
+		after := otp.FromNow(1)
+
+		if code != before && code != now && code != after {
+			c.HTML(200, "second.tmpl", gin.H{"error": "Código Incorrecto"})
+			return
+		}
+
+		session.Values["twofactor"] = true
+		session.Save(c.Request, c.Writer)
+		c.Redirect(301, "/app/secret")
+
+	})
+
 	//Logout
 	r.GET("/logout", func(c *gin.Context) {
 		session, err := store.Get(c.Request, "cookie")
@@ -187,28 +260,25 @@ func main() {
 		delete(session.Values, "twofactor")
 		session.Save(c.Request, c.Writer)
 
-		c.HTML(200, "second.tmpl", nil)
+		c.Redirect(301, "/")
 	})
 
-	personalOnly := r.Group("/app")
-
-	personalOnly.Use(func(c *gin.Context) {
+	r.GET("/app/secret", func(c *gin.Context) {
 		session, err := store.Get(c.Request, "cookie")
 		if err != nil {
 			c.AbortWithStatus(500)
 			return
 		}
 
-		_, hasUser := session.Values["user"]
-		_, hasTwofactor := session.Values["twofactor"]
+		_, okUser := session.Values["user"]
+		_, okTwo := session.Values["twofactor"]
 
-		if hasUser && hasTwofactor {
-			c.Next()
+		if !okUser || !okTwo {
+			c.Redirect(301, "/login")
 			return
 		}
 
-		c.Redirect(301, "/login")
-
+		c.HTML(200, "secret.tmpl", nil)
 	})
 
 	// Listen and serve on 0.0.0.0:8080
