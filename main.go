@@ -45,8 +45,6 @@ func main() {
 	r.LoadHTMLGlob("templates/*")
 
 	port := os.Getenv("PORT")
-	println(port)
-
 	if len(port) == 0 {
 		port = "8080"
 	}
