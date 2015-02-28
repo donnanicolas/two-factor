@@ -9,6 +9,7 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/mattn/go-sqlite3"
 	"math/rand"
+	"os"
 	"strconv"
 	"time"
 )
@@ -42,6 +43,13 @@ func main() {
 	//Servidor
 	r := gin.Default()
 	r.LoadHTMLGlob("templates/*")
+
+	port := os.Getenv("PORT")
+	println(port)
+
+	if len(port) == 0 {
+		port = "8080"
+	}
 
 	//DB
 	db, err := gorm.Open("sqlite3", "/tmp/two-factor.db")
@@ -142,7 +150,7 @@ func main() {
 		qrUrl := otp.QRCodeGoogleChartsUrl("TOTP "+user.Email, 300)
 
 		//Borramos la variable new para no mostrar de nuevo el código
-		//delete(session.Values, "new")
+		delete(session.Values, "new")
 		session.Save(c.Request, c.Writer)
 
 		c.HTML(200, "qr.tmpl", gin.H{"qrUrl": qrUrl})
@@ -308,5 +316,5 @@ func main() {
 	})
 
 	//Escuchamos en el puerto 8080
-	r.Run(":8080")
+	r.Run(":" + port)
 }
