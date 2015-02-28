@@ -1,3 +1,18 @@
-Hello
+{{ template "header" }}
+<div class="jumbotron">
+    <h1>Bienvenido</h1>
+    <p>Esta aplicación solo sirve para crear una cuenta y loguearse con autenticación en dos pasos</p>
+    <p>Para ello antes de crearse una cuenta debe descargar <span class="text-warning">Google Authenticator</span></p>
+    <a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2">
+        <img alt="Get it on Google Play"
+             src="https://developer.android.com/images/brand/es-419_generic_rgb_wo_60.png" />
+    </a>
+    <a href="https://itunes.apple.com/ar/app/google-authenticator/id388497605?mt=8&uo=4" target="itunes_store" style="display:inline-block;overflow:hidden;background:url(https://linkmaker.itunes.apple.com/htmlResources/assets/es_mx//images/web/linkmaker/badge_appstore-lrg.png) no-repeat;width:135px;height:40px;@media only screen{background-image:url(https://linkmaker.itunes.apple.com/htmlResources/assets/es_mx//images/web/linkmaker/badge_appstore-lrg.svg);}"></a>
 
-<a href="/login">Login</a>
+    <p>Luego de descargar la aplicación, registrate:</p>
+
+    <p><a class="btn btn-primary btn-lg" href="/register" role="button">Registro</a></p>
+    <p>Si ya tiene cuenta, inicia sesión: </p>
+    <p><a class="btn btn-default btn-lg" href="/login" role="button">Login</a></p>
+</div>
+{{ template "footer" }}

@@ -1,3 +1,13 @@
-<img src="{{ .qrUrl }}" alt=""/>
-
-<h3>{{ .code }}</h3>
+{{ template "header" }}
+<div class="jumbotron">
+    <div class="row">
+        <div class="col-md-5 col-md-offset-1">
+            <img src="{{ .qrUrl }}" class="thumbnail" alt=""/>
+        </div>
+        <div class="col.md-4">
+            <p>Utilice este código en Google Authenticator para registrar una nueva cuenta.</p>
+            <a href="/login/second" class="btn btn-primary btn-lg">Continuar</a>
+        </div>
+    </div>
+</div>
+{{ template "footer" }}

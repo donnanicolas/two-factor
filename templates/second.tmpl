@@ -1,9 +1,22 @@
-<form method="POST">
-    {{ .error }}
-    <div>
-        <label for="code">Código *</label>
-        <input type="text" name="code" id="code" placeholder="Code" required />
+{{ template "header" }}
+<form method="POST" class="form-horizontal">
+    <legend>Ingrese el código de Google Authenticator</legend>
+    {{ if .error }}
+        <div class="alert alert-danger">
+            {{ .error }}
+        </div>
+    {{ end }}
+    <div class="form-group">
+        <label for="code" class="col-sm-2 control-label">Código *</label>
+        <div class="col-sm-10">
+            <input type="text" name="code" id="code" class="form-control" placeholder="Code" required />
+        </div>
     </div>
-    <button type="submit">Continuar</button>
-    <a href="/logout">Salir</a>
+    <div class="form-group">
+        <div class="col-sm-offset-2 col-sm-10">
+            <button type="submit" class="btn btn-primary">Continuar</button>
+            <a class="btn btn-danger" href="/logout">Salir</a>
+        </div>
+    </div>
 </form>
+{{ template "footer" }}

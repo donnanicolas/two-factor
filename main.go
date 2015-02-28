@@ -39,7 +39,7 @@ type User struct {
 }
 
 func main() {
-	//Server
+	//Servidor
 	r := gin.Default()
 	r.LoadHTMLGlob("templates/*")
 
@@ -49,10 +49,10 @@ func main() {
 		panic(err)
 	}
 
-	//Create Table
+	//Creamos la tabla
 	db.CreateTable(&User{})
 
-	//Session Store
+	//Cookies para la sesión
 	var store = sessions.NewCookieStore([]byte("shhhh!"))
 	if err != nil {
 		panic(err)
@@ -103,7 +103,8 @@ func main() {
 
 		db.Create(&user)
 		session.Values["user"] = user.ID
-		//We flag the user as new so we can show him the QR code
+
+		//Usamos esta variable para mostrarle el código QR al usuario por única vez
 		session.Values["new"] = 1
 		session.Save(c.Request, c.Writer)
 		c.Redirect(301, "/register/second")
@@ -126,8 +127,9 @@ func main() {
 
 		var user User
 		if db.First(&user, userId).RecordNotFound() {
-			//If we can't find the user we logout
-			//This is a rare condition, can happen when a record has been deleted
+			//Si no podemos encontrar al usuario, redireccionamos al /logout
+			//Es una condición rara, solo debería suceder si entre el login y el ingreso del código
+			//el usuario fue borrado de la db
 			c.Redirect(301, "/logout")
 			return
 		}
@@ -137,14 +139,28 @@ func main() {
 			c.AbortWithStatus(500)
 		}
 
-		code := otp.Now()
-		qrUrl := otp.QRCodeGoogleChartsUrl("TOTP", 300)
+		qrUrl := otp.QRCodeGoogleChartsUrl("TOTP "+user.Email, 300)
 
-		c.HTML(200, "qr.tmpl", gin.H{"code": code, "qrUrl": qrUrl})
+		//Borramos la variable new para no mostrar de nuevo el código
+		//delete(session.Values, "new")
+		session.Save(c.Request, c.Writer)
+
+		c.HTML(200, "qr.tmpl", gin.H{"qrUrl": qrUrl})
 	})
 
 	//Login
 	r.GET("/login", func(c *gin.Context) {
+		session, err := store.Get(c.Request, "cookie")
+		if err != nil {
+			c.AbortWithStatus(500)
+			return
+		}
+
+		if _, ok := session.Values["user"]; ok {
+			c.Redirect(301, "/login/second")
+			return
+		}
+
 		c.HTML(200, "login.tmpl", nil)
 	})
 
@@ -158,7 +174,10 @@ func main() {
 			return
 		}
 
-		if _, ok := session.Values["user"]; ok {
+		u, ok := session.Values["user"]
+		println(u)
+		println(ok)
+		if ok {
 			c.Redirect(301, "/login/second")
 			return
 		}
@@ -192,6 +211,11 @@ func main() {
 			return
 		}
 
+		if _, ok := session.Values["twofactor"]; ok {
+			c.Redirect(301, "/app/secret")
+			return
+		}
+
 		c.HTML(200, "second.tmpl", nil)
 	})
 
@@ -204,6 +228,7 @@ func main() {
 			c.AbortWithStatus(500)
 			return
 		}
+
 		userId, ok := session.Values["user"]
 		if !ok {
 			c.Redirect(301, "/login")
@@ -226,7 +251,8 @@ func main() {
 
 		code := int32(code64)
 
-		//We use the code from before and after to take in account time differences between the device and the server
+		//Usamos el código anterior y el siguiente para tener en cuenta las diferencias de tiempo entre el servidor
+		//y el cliente
 		before := otp.FromNow(-1)
 		now := otp.Now()
 		after := otp.FromNow(1)
@@ -236,10 +262,10 @@ func main() {
 			return
 		}
 
+		//Seteamos la cookie para indentificarlo como autenticado
 		session.Values["twofactor"] = true
 		session.Save(c.Request, c.Writer)
 		c.Redirect(301, "/app/secret")
-
 	})
 
 	//Logout
@@ -255,7 +281,7 @@ func main() {
 			return
 		}
 
-		//Delete the session)
+		//Borramos la session
 		delete(session.Values, "user")
 		delete(session.Values, "twofactor")
 		session.Save(c.Request, c.Writer)
@@ -281,6 +307,6 @@ func main() {
 		c.HTML(200, "secret.tmpl", nil)
 	})
 
-	// Listen and serve on 0.0.0.0:8080
+	//Escuchamos en el puerto 8080
 	r.Run(":8080")
 }
