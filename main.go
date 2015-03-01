@@ -2,9 +2,11 @@ package main
 
 import (
 	"crypto/sha512"
+	"fmt"
 	"github.com/craigmj/gototp"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jinzhu/gorm"
 	_ "github.com/mattn/go-sqlite3"
@@ -30,13 +32,17 @@ type CodeForm struct {
 }
 
 type User struct {
-	ID        int
-	Name      string
-	Email     string `sql:"type:varchar(200);"`
-	TOTP      string `sql:"type:varchar(16);"`
-	Password  string `sql:"type:varchar(512)"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID       int
+	Name     string
+	Email    string `sql:"type:varchar(200);"`
+	TOTP     string `sql:"type:varchar(16);"`
+	Password string `sql:"type:varchar(512)"`
+}
+
+type Configuration struct {
+	DbType         string //MySQL o SQLite
+	DbConfigString string //El string como parametro para gorm#Open
+	Port           string //El puerto donde hacer el bind
 }
 
 func main() {
@@ -44,13 +50,10 @@ func main() {
 	r := gin.Default()
 	r.LoadHTMLGlob("templates/*")
 
-	port := os.Getenv("PORT")
-	if len(port) == 0 {
-		port = "8080"
-	}
+	conf := getConfiguration()
 
 	//DB
-	db, err := gorm.Open("sqlite3", "/tmp/two-factor.db")
+	db, err := gorm.Open(conf.DbType, conf.DbConfigString)
 	if err != nil {
 		panic(err)
 	}
@@ -97,13 +100,14 @@ func main() {
 		}
 
 		pwd := sha512.Sum512([]byte(form.Password))
+
 		rnd := rand.New(rand.NewSource(time.Now().Unix()))
 		TOTP := gototp.RandomSecret(0, rnd)
 
 		user = User{
 			Name:     form.Name,
 			Email:    form.Email,
-			Password: string(pwd[:]),
+			Password: fmt.Sprintf("%x", pwd[:]),
 			TOTP:     TOTP,
 		}
 
@@ -180,9 +184,7 @@ func main() {
 			return
 		}
 
-		u, ok := session.Values["user"]
-		println(u)
-		println(ok)
+		_, ok := session.Values["user"]
 		if ok {
 			c.Redirect(301, "/login/second")
 			return
@@ -194,7 +196,7 @@ func main() {
 			return
 		}
 
-		if pwd := sha512.Sum512([]byte(form.Password)); string(pwd[:]) != user.Password {
+		if pwd := sha512.Sum512([]byte(form.Password)); fmt.Sprintf("%x", pwd[:]) != user.Password {
 			c.HTML(200, "login.tmpl", gin.H{"error": "Usuario o contraseña incorrecto/s"})
 			return
 		}
@@ -313,6 +315,36 @@ func main() {
 		c.HTML(200, "secret.tmpl", nil)
 	})
 
-	//Escuchamos en el puerto 8080
-	r.Run(":" + port)
+	//Escuchamos en el puerto en $PORT o el 8080
+	r.Run(":" + conf.Port)
+}
+
+func getConfiguration() Configuration {
+	conf := Configuration{}
+
+	port := os.Getenv("PORT")
+	if len(port) == 0 {
+		port = "8080"
+	}
+
+	conf.Port = port
+
+	mysqlString := os.Getenv("MYSQL_STRING")
+
+	//Si esta definido mysql, lo usamos
+	if len(mysqlString) != 0 {
+		conf.DbType = "mysql"
+		conf.DbConfigString = mysqlString
+		return conf
+	}
+
+	sqlitePath := os.Getenv("SQLITE_PATH")
+	if len(sqlitePath) == 0 {
+		sqlitePath = "/tmp/two-factor.db"
+	}
+
+	conf.DbType = "sqlite3"
+	conf.DbConfigString = sqlitePath
+
+	return conf
 }
