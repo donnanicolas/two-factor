@@ -12,6 +12,11 @@
 			"Rev": "50e7e427300a7eeeb299a4cd5bc1ebfa04d48528"
 		},
 		{
+			"ImportPath": "github.com/go-sql-driver/mysql",
+			"Comment": "v1.2-88-ga197e5d",
+			"Rev": "a197e5d40516f2e9f74dcee085a5f2d4604e94df"
+		},
+		{
 			"ImportPath": "github.com/gorilla/context",
 			"Rev": "215affda49addc4c8ef7e2534915df2c8c35c6cd"
 		},
