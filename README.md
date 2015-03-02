@@ -10,7 +10,7 @@ https://github.com/tools/godep
 
 Para compilar la aplicación correr
 ```bash
-go build
+godep go build
 ```
 
 ##Correr el servicio
