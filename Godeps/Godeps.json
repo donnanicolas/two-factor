@@ -44,6 +44,10 @@
 		{
 			"ImportPath": "github.com/mattn/go-sqlite3",
 			"Rev": "da2bf8a0f356364fb8189a5a276b5acf77839d30"
+		},
+		{
+			"ImportPath": "github.com/satori/go.uuid",
+			"Rev": "242673bbc820e051ef00033e274d32e08ece9e15"
 		}
 	]
 }

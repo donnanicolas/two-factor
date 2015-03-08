@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/jinzhu/gorm"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/satori/go.uuid"
 	"math/rand"
 	"os"
 	"strconv"
@@ -27,6 +28,10 @@ type RegisterForm struct {
 	Password string `form:"password" binding:"required"`
 }
 
+type RecoverForm struct {
+	Code string `form:"code" binding:"required"`
+}
+
 type CodeForm struct {
 	Code string `form:"code" bindind:"required"`
 }
@@ -37,6 +42,7 @@ type User struct {
 	Email    string `sql:"type:varchar(200);"`
 	TOTP     string `sql:"type:varchar(16);"`
 	Password string `sql:"type:varchar(512)"`
+	Recovery string `sql:"type:varchar(`
 }
 
 type Configuration struct {
@@ -103,12 +109,14 @@ func main() {
 
 		rnd := rand.New(rand.NewSource(time.Now().Unix()))
 		TOTP := gototp.RandomSecret(0, rnd)
+		recovery := uuid.NewV4()
 
 		user = User{
 			Name:     form.Name,
 			Email:    form.Email,
 			Password: fmt.Sprintf("%x", pwd[:]),
 			TOTP:     TOTP,
+			Recovery: recovery.String(),
 		}
 
 		db.Create(&user)
@@ -155,7 +163,7 @@ func main() {
 		delete(session.Values, "new")
 		session.Save(c.Request, c.Writer)
 
-		c.HTML(200, "qr.tmpl", gin.H{"qrUrl": qrUrl})
+		c.HTML(200, "qr.tmpl", gin.H{"qrUrl": qrUrl, "recovery": user.Recovery})
 	})
 
 	//Login
@@ -295,6 +303,51 @@ func main() {
 		session.Save(c.Request, c.Writer)
 
 		c.Redirect(301, "/")
+	})
+
+	r.GET("/recover", func(c *gin.Context) {
+		session, err := store.Get(c.Request, "cookie")
+		if err != nil {
+			c.AbortWithStatus(500)
+			return
+		}
+
+		if _, ok := session.Values["user"]; !ok {
+			c.Redirect(301, "/")
+			return
+		}
+
+		c.HTML(200, "recover.tmpl", nil)
+	})
+
+	r.POST("/recover", func(c *gin.Context) {
+		session, err := store.Get(c.Request, "cookie")
+		if err != nil {
+			c.AbortWithStatus(500)
+			return
+		}
+
+		userId, ok := session.Values["user"]
+		if !ok {
+			c.Redirect(301, "/")
+			return
+		}
+
+		var form RecoverForm
+		c.BindWith(&form, binding.Form)
+
+		var user User
+		db.First(&user, userId)
+
+		if user.Recovery != form.Code {
+			c.HTML(200, "recover.tmpl", gin.H{"error": "Código Incorrecto"})
+			return
+		}
+
+		//Si todo esta bien, lo rediccionamos al mismo lugar que después del registro
+		session.Values["new"] = 1
+		session.Save(c.Request, c.Writer)
+		c.Redirect(301, "/register/second")
 	})
 
 	r.GET("/app/secret", func(c *gin.Context) {

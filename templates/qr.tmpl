@@ -4,7 +4,13 @@
         <div class="col-md-5 col-md-offset-1">
             <img src="{{ .qrUrl }}" class="thumbnail" alt=""/>
         </div>
-        <div class="col.md-4">
+        <div class="col-md-4">
+            <div class="alert alert-info">
+                Este es su identificador de respaldo, en caso de que necesite recuperar la infomación de la autencación de dos factores, este va a ser requerido:
+                <div class="alert alert-default">
+                    {{ .recovery }}
+                </div>
+            </div>
             <p>Utilice este código en Google Authenticator para registrar una nueva cuenta.</p>
             <a href="/login/second" class="btn btn-primary btn-lg">Continuar</a>
         </div>
