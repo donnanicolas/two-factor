@@ -12,9 +12,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"math/rand"
 	"os"
+	"regexp"
 	"strconv"
 	"time"
 )
+
+//Usamos una regex simple por http://davidcel.is/blog/2012/09/06/stop-validating-email-addresses-with-regex/
+//Para confirmar realmente si existe el email, necesitamos un E-Mail de confirmación
+var emailRegex *regexp.Regexp = regexp.MustCompile(`.+@.+\..+`)
 
 type LoginForm struct {
 	Email    string `form:"email" binding:"required"`
@@ -98,6 +103,11 @@ func main() {
 		}
 
 		if !c.BindWith(&form, binding.Form) {
+			return
+		}
+
+		if !emailRegex.Match([]byte(form.Email)) {
+			c.HTML(200, "register.tmpl", gin.H{"error": "El E-Mail es inválido"})
 			return
 		}
 
