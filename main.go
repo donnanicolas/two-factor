@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha512"
-	"fmt"
 	"github.com/craigmj/gototp"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -11,6 +9,7 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/satori/go.uuid"
+	"golang.org/x/crypto/bcrypt"
 	"math/rand"
 	"os"
 	"strconv"
@@ -41,8 +40,8 @@ type User struct {
 	Name     string
 	Email    string `sql:"type:varchar(200);"`
 	TOTP     string `sql:"type:varchar(16);"`
-	Password string `sql:"type:varchar(512)"`
-	Recovery string `sql:"type:varchar(`
+	Password string `sql:"type:varchar(128);"`
+	Recovery string `sql:"type:varchar(40);"`
 }
 
 type Configuration struct {
@@ -98,14 +97,20 @@ func main() {
 			return
 		}
 
-		c.BindWith(&form, binding.Form)
+		if !c.BindWith(&form, binding.Form) {
+			return
+		}
 
 		if !db.Where("email = ?", form.Email).First(&user).RecordNotFound() {
 			c.HTML(200, "register.tmpl", gin.H{"error": "El E-Mail ya esta siendo utilizado"})
 			return
 		}
 
-		pwd := sha512.Sum512([]byte(form.Password))
+		pwd, err := bcrypt.GenerateFromPassword([]byte(form.Password), 0)
+		if err != nil {
+			c.AbortWithStatus(500)
+			return
+		}
 
 		rnd := rand.New(rand.NewSource(time.Now().Unix()))
 		TOTP := gototp.RandomSecret(0, rnd)
@@ -114,7 +119,7 @@ func main() {
 		user = User{
 			Name:     form.Name,
 			Email:    form.Email,
-			Password: fmt.Sprintf("%x", pwd[:]),
+			Password: string(pwd[:]),
 			TOTP:     TOTP,
 			Recovery: recovery.String(),
 		}
@@ -198,13 +203,15 @@ func main() {
 			return
 		}
 
-		c.BindWith(&form, binding.Form)
+		if !c.BindWith(&form, binding.Form) {
+			return
+		}
 		if db.Where("email = ?", form.Email).First(&user).RecordNotFound() {
 			c.HTML(200, "login.tmpl", gin.H{"error": "Usuario o contraseña incorrecto/s"})
 			return
 		}
 
-		if pwd := sha512.Sum512([]byte(form.Password)); fmt.Sprintf("%x", pwd[:]) != user.Password {
+		if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(form.Password)) != nil {
 			c.HTML(200, "login.tmpl", gin.H{"error": "Usuario o contraseña incorrecto/s"})
 			return
 		}
@@ -237,7 +244,9 @@ func main() {
 
 	r.POST("/login/second", func(c *gin.Context) {
 		var form CodeForm
-		c.BindWith(&form, binding.Form)
+		if !c.BindWith(&form, binding.Form) {
+			return
+		}
 
 		session, err := store.Get(c.Request, "cookie")
 		if err != nil {
@@ -334,7 +343,9 @@ func main() {
 		}
 
 		var form RecoverForm
-		c.BindWith(&form, binding.Form)
+		if !c.BindWith(&form, binding.Form) {
+			return
+		}
 
 		var user User
 		db.First(&user, userId)
